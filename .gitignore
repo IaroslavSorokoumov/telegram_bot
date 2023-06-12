@@ -132,3 +132,4 @@ dmypy.json
 /t_bot/
 /test.py
 /hotel_response.json
+/cities.json

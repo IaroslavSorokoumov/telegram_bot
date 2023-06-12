@@ -8,3 +8,7 @@ class UserAnswers(StatesGroup):
     date = State()
     photo = State()
     photo_qty = State()
+    photo_qty_2 = State()
+    city_id = State()
+    check_in = State()
+    check_out = State()

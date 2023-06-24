@@ -89,6 +89,10 @@ def get_photo(m: Message) -> None:
             data['photo'] = False
 
         bot.send_message(m.from_user.id, 'Теперь необходимо выбрать дату заезда.')
+        calendar, step = DetailedTelegramCalendar(calendar_id=1, locale='ru', min_date=datetime.date.today()).build()
+        bot.send_message(m.chat.id,
+                         f"Выберите {LSTEP[step]}",
+                         reply_markup=calendar)
         bot.set_state(m.from_user.id, UserAnswers.check_in, m.chat.id)
 
     else:
@@ -190,6 +194,7 @@ def calendar(call: CallbackQuery):
 def get_hotels(m: Message):
 
     if m.text.lower() == "да":
+        bot.send_message(m.from_user.id, text='Ищу варианты по вашему запросу, нужно несколько секунд...')
         with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
             cust_data = data
         hotels_list = get_hotel_list(cust_data=cust_data)
@@ -199,26 +204,27 @@ def get_hotels(m: Message):
         for hotel in range(hotels_qty):
             hotel_id = int(hotels_list['data']['propertySearch']['properties'][hotel]['id'])
             hotel_name = hotels_list['data']['propertySearch']['properties'][hotel]['name']
-            hotel_price = float(
-                hotels_list['data']['propertySearch']['properties'][hotel]['price']['options'][0]['strikeOut']['amount']
-            )
+            hotel_price = float(hotels_list['data']['propertySearch']['properties'][hotel]['price']['lead']['amount'],)
             common_price = float(hotel_price * hotel_days)
-            hotel_location = float(
-                hotels_list['data']['propertySearch']['properties'][hotel]['destinationInfo']['distanceFromDestination']['value']
-            )
+            hotel_location = hotels_list['data']['propertySearch']['properties'][hotel]['destinationInfo']['distanceFromDestination']['value']
             hotel_details = get_hotel_details(hotel_id=hotel_id)
             hotel_address = hotel_details['data']['propertyInfo']['summary']['location']['address']['addressLine']
-            bot.send_message(m.from_user.id,
+            hotel_url = ""
+            bot.send_message(m.from_user.id, text=
                              f"Данные по отелю {hotel_name}: "
                              f"\nАдрес: {hotel_address}"
-                             f"\nРасстояние от центра города = {hotel_location}"
-                             f"\nСтоимость за 1 ночь = {hotel_price} долларов США"
-                             f"\nОбщая стоимость за {hotel_days} = {common_price} долларов США",
-                             m.chat.id)
+                             f"\nРасстояние от центра города = {hotel_location} км"
+                             f"\nСтоимость за 1 ночь = {round(hotel_price, 2)} долларов США"
+                             f"\nОбщая стоимость за {hotel_days} дней = {round(common_price, 2)} долларов США")
             if data['photo']:
+                bot.send_message(m.from_user.id, text='Фотографии отеля:')
                 hotel_photos = data['photo_qty']
                 for photo in range(hotel_photos):
                     photo_url = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['url']
+                    description = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['description']
+                    bot.send_message(m.from_user.id, text=
+                    f"{description}\n"
+                    f"{photo_url}")
 
     else:
         bot.reply_to(m, "Попробуйте начать сначала, для ввода данных")

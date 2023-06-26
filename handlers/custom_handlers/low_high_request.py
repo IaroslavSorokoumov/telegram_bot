@@ -12,12 +12,22 @@ from .calendar import date_selection
 import datetime
 from telegram_bot_calendar import DetailedTelegramCalendar #LSTEP
 from handlers.custom_handlers.help import bot_help
+from database.bot_db import add_bot_user, add_response_to_db
 
 LSTEP: dict[str, str] = {'y': 'год', 'm': 'месяц', 'd': 'день'}
 @bot.message_handler(commands=["lowprice", "highprice", "bestdeal"])
 def lowprice(m: Message) -> None:
-    """функция обработки запроса /lowprice, /highprice и /bestdeal. Записываю начальные состояния юзера
-    Ловим ответ пользователя - город для поиска отеля"""
+    """функция обработки запроса /lowprice, /highprice и /bestdeal.
+    Ловим ответ пользователя - город для поиска отеля
+    Записываю начальные состояния юзера
+    Записываю данные юзерв в БД"""
+
+    chat_id = m.from_user.id
+    user_name = m.from_user.username
+    user_fullname = m.from_user.full_name
+    add_bot_user(chat_id=chat_id,
+                 user_name=user_name,
+                 )
 
     bot.set_state(m.from_user.id, UserAnswers.city, m.chat.id)
     bot.send_message(m.from_user.id, text='Какой город вас интересует? ')
@@ -192,6 +202,10 @@ def calendar(call: CallbackQuery):
 
 @bot.message_handler(state=UserAnswers.final)
 def get_hotels(m: Message):
+    """отправка запроса к API по ID города.
+    Парсинг ответа, получение ID отелей и других данных.
+     При необходимости снова запрос для получения фото и адреса.
+     Запись данных о пользователе и отелях в БД"""
 
     if m.text.lower() == "да":
         bot.send_message(m.from_user.id, text='Ищу варианты по вашему запросу, нужно несколько секунд...')
@@ -201,7 +215,9 @@ def get_hotels(m: Message):
         # print(hotels_list)
         hotels_qty = int(data['hotel_qty'])
         hotel_days = int(data['days_in_hotel'])
+        city_name = data['city']
         for hotel in range(hotels_qty):
+            hotel_data = dict()
             hotel_id = int(hotels_list['data']['propertySearch']['properties'][hotel]['id'])
             hotel_name = hotels_list['data']['propertySearch']['properties'][hotel]['name']
             hotel_price = float(hotels_list['data']['propertySearch']['properties'][hotel]['price']['lead']['amount'],)
@@ -209,7 +225,19 @@ def get_hotels(m: Message):
             hotel_location = hotels_list['data']['propertySearch']['properties'][hotel]['destinationInfo']['distanceFromDestination']['value']
             hotel_details = get_hotel_details(hotel_id=hotel_id)
             hotel_address = hotel_details['data']['propertyInfo']['summary']['location']['address']['addressLine']
-            hotel_url = ""
+            hotel_data = {          # делаю словарь с данными об отеле для сохранения в БД, фото не сохраняю.
+                'chat_id': m.from_user.id,
+                'city_name': city_name,
+                'hotel_id': hotel_id,
+                'hotel_name': hotel_name,
+                'hotel_price': hotel_price,
+                'common_price': common_price,
+                'hotel_address': hotel_address,
+                'hotel_days': hotel_days,
+                'hotel_location': hotel_location
+
+            }
+            add_response_to_db(hotel_data=hotel_data)
             bot.send_message(m.from_user.id, text=
                              f"Данные по отелю {hotel_name}: "
                              f"\nАдрес: {hotel_address}"
@@ -225,7 +253,7 @@ def get_hotels(m: Message):
                     bot.send_message(m.from_user.id, text=
                     f"{description}\n"
                     f"{photo_url}")
-
+        bot_help(m)
     else:
         bot.reply_to(m, "Попробуйте начать сначала, для ввода данных")
         bot_help(m)

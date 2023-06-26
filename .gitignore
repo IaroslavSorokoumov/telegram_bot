@@ -133,3 +133,6 @@ dmypy.json
 /test.py
 /hotel_response.json
 /cities.json
+/database/response_history.db
+/database/users_history.db
+/database/history.sqlite3

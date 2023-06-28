@@ -90,41 +90,79 @@ def get_hotel_list(cust_data):
     """запрос на список отелей"""
 
     price_choice = "PRICE_LOW_TO_HIGH"
-    if cust_data['command'] == 'highprice':
+
+    if cust_data['command'] in ['highprice', 'bestdeal']:
         price_choice = "PRICE_HIGH_TO_LOW"
+
+    params = {
+        "currency": "USD",
+        "eapid": 1,
+        "locale": "ru_RU",
+        "siteId": 300000001,
+        "destination": {
+            "regionId": f"{cust_data['city_id']}"  # id из первого запроса
+        },
+        "checkInDate": {
+            "day": int(cust_data['check_in'][:2]),
+            "month": int(cust_data['check_in'][3:5]),
+            "year": int(cust_data['check_in'][-4:])
+        },
+        "checkOutDate": {
+            "day": int(cust_data['check_out'][:2]),
+            "month": int(cust_data['check_out'][3:5]),
+            "year": int(cust_data['check_out'][-4:])
+        },
+        "rooms": [
+            {
+                "adults": 1
+            }
+        ],
+        "resultsStartingIndex": 0,
+        "resultsSize": int(cust_data['hotel_qty']),
+        "sort": price_choice,
+        "filters": {
+            "availableFilter": "SHOW_AVAILABLE_ONLY"
+        }
+    }
+    if cust_data['command'] == 'bestdeal':
+        params = {
+            "currency": "USD",
+            "eapid": 1,
+            "locale": "ru_RU",
+            "siteId": 300000001,
+            "destination": {
+                "regionId": f"{cust_data['city_id']}"  # id из первого запроса
+            },
+            "checkInDate": {
+                "day": int(cust_data['check_in'][:2]),
+                "month": int(cust_data['check_in'][3:5]),
+                "year": int(cust_data['check_in'][-4:])
+            },
+            "checkOutDate": {
+                "day": int(cust_data['check_out'][:2]),
+                "month": int(cust_data['check_out'][3:5]),
+                "year": int(cust_data['check_out'][-4:])
+            },
+            "rooms": [
+                {
+                    "adults": 1
+                }
+            ],
+            "resultsStartingIndex": 0,
+            "resultsSize": int(cust_data['hotel_qty']),
+            "sort": price_choice,
+            "filters": {
+                "price": {
+                    "max": cust_data['max_price'],
+                    "min": cust_data['min_price']
+                },
+                "availableFilter": "SHOW_AVAILABLE_ONLY"
+            }
+        }
 
     hotel_list = api_request(
         method_endswith=req_hotel_prop,
-        params={
-            "currency": "USD",
-             "eapid": 1,
-             "locale": "ru_RU",
-             "siteId": 300000001,
-             "destination": {
-                "regionId": f"{cust_data['city_id']}"  # id из первого запроса
-         },
-         "checkInDate": {
-             "day": int(cust_data['check_in'][:2]),
-             "month": int(cust_data['check_in'][3:5]),
-             "year": int(cust_data['check_in'][-4:])
-         },
-         "checkOutDate": {
-             "day": int(cust_data['check_out'][:2]),
-             "month": int(cust_data['check_out'][3:5]),
-             "year": int(cust_data['check_out'][-4:])
-         },
-         "rooms": [
-             {
-                 "adults": 1
-             }
-         ],
-         "resultsStartingIndex": 0,
-         "resultsSize": int(cust_data['hotel_qty']),
-         "sort": price_choice,
-         "filters": {
-             "availableFilter": "SHOW_AVAILABLE_ONLY"
-         }
-         },
+        params=params,
         method_type="POST"
     )
     # print(hotel_list.json())

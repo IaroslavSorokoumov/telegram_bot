@@ -20,20 +20,16 @@ def lowprice(m: Message) -> None:
     """функция обработки запроса /lowprice, /highprice и /bestdeal.
     Ловим ответ пользователя - город для поиска отеля
     Записываю начальные состояния юзера"""
-    if m.text == '/bestdeal':
-        bot.reply_to(m, 'Команда в разработке, '
-                             'пока можно использовать /lowprice и /highprice для поиска.'
-                             'Пардон.')
-        bot_help(m)
-    else:
-        bot.set_state(m.from_user.id, UserAnswers.city, m.chat.id)
-        bot.send_message(m.from_user.id, text='Какой город вас интересует? ')
 
-        with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
-            data['command'] = m.text[1:]
-            data['chat_id'] = m.chat.id
-            data['tgram_id'] = m.from_user.id
-            data['date_time'] = datetime.datetime.utcnow().strftime('%d-%m-%Y %H:%M:%S')
+
+    bot.set_state(m.from_user.id, UserAnswers.city, m.chat.id)
+    bot.send_message(m.from_user.id, text='Какой город вас интересует? ')
+
+    with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
+        data['command'] = m.text[1:]
+        data['chat_id'] = m.chat.id
+        data['tgram_id'] = m.from_user.id
+        data['date_time'] = datetime.datetime.utcnow().strftime('%d-%m-%Y %H:%M:%S')
 
 @bot.message_handler(state=UserAnswers.city)
 def get_city_name(m: Message) -> None:
@@ -59,6 +55,7 @@ def get_city_id(call: CallbackQuery):
     city_id = call.data # Id города в сообщении от кнопки
     with bot.retrieve_data(call.from_user.id, call.message.chat.id) as data:
         city_data = data['cities_data']
+        command = data['command']
     city_name = ""
     for k, v in city_data.items(): # ищу имя города по его Id
         if city_id == v:
@@ -66,14 +63,92 @@ def get_city_id(call: CallbackQuery):
     with bot.retrieve_data(call.from_user.id, call.message.chat.id) as data:
         data['city'] = city_name
 
-    bot.send_message(call.from_user.id, 'Отлично. Cколько отелей хотите просмотреть (не более 5)?', reply_markup=answ.request_hotels())
-    # получаю ответ по клавишам с цифрами - функция request_hotels
-    bot.set_state(call.from_user.id, UserAnswers.hotel_qty, call.message.chat.id)
+    if command == 'bestdeal':
+        bot.send_message(
+            call.from_user.id,
+            "Принято. Какая минимальная стоимость отеля за ночь в долларах США вас интересует?"
+        )
+        bot.set_state(call.from_user.id, UserAnswers.min_price, call.message.chat.id)
+    else:
+        bot.send_message(call.from_user.id, 'Отлично. Cколько отелей хотите просмотреть (не более 5)?', reply_markup=answ.request_hotels())
+        # получаю ответ по клавишам с цифрами - функция request_hotels
+        bot.set_state(call.from_user.id, UserAnswers.hotel_qty, call.message.chat.id)
 
     with bot.retrieve_data(call.from_user.id, call.message.chat.id) as data:
         data['city_id'] = int(city_id)
 
 
+@bot.message_handler(state=UserAnswers.min_price)
+def get_min_price(m: Message) -> None:
+    if m.text.isdigit():
+        bot.send_message(
+            m.from_user.id,
+            "Отлично. Теперь максимальная стоимость?"
+        )
+        bot.set_state(m.from_user.id, UserAnswers.max_price, m.chat.id)
+        with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
+            data['min_price'] = float(m.text)
+    else:
+        bot.reply_to(m, "Ошибка. Только цифры.")
+
+@bot.message_handler(state=UserAnswers.max_price)
+def get_min_price(m: Message) -> None:
+    with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
+        min_price = data['min_price']
+
+    if m.text.isdigit():
+        max_price = float(m.text)
+        if max_price >= min_price:
+            bot.send_message(
+                m.from_user.id,
+                "Спасибо. Теперь укажите минимальное расстояние от центра города в км?"
+            )
+            bot.set_state(m.from_user.id, UserAnswers.min_distance, m.chat.id)
+            with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
+                data['max_price'] = max_price
+        else:
+            bot.reply_to(m, "Ошибка. Максимальная цена должна быть больше минимальной.")
+    else:
+        bot.reply_to(m, "Ошибка. Только цифры.")
+
+
+@bot.message_handler(state=UserAnswers.min_distance)
+def get_min_price(m: Message) -> None:
+
+    if m.text.isdigit():
+        bot.send_message(
+            m.from_user.id,
+            "Отлично. Теперь максимальное расстояние?"
+        )
+        bot.set_state(m.from_user.id, UserAnswers.max_distance, m.chat.id)
+        with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
+            data['min_distance'] = float(m.text)
+    else:
+        bot.reply_to(m, "Ошибка. Только цифры.")
+
+
+@bot.message_handler(state=UserAnswers.max_distance)
+def get_min_price(m: Message) -> None:
+
+    with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
+        min_distance = data['min_distance']
+
+    if m.text.isdigit():
+        max_distance = float(m.text)
+        if max_distance >= min_distance:
+            bot.send_message(
+                m.from_user.id, 'Отлично. Cколько отелей хотите просмотреть (не более 5)?',
+                reply_markup=answ.request_hotels()
+            )
+            # получаю ответ по клавишам с цифрами - функция request_hotels
+            bot.set_state(m.from_user.id, UserAnswers.hotel_qty, m.chat.id)
+
+            with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
+                data['max_distance'] = max_distance
+        else:
+            bot.reply_to(m, "Ошибка. Максимальная расстояние должно быть больше минимального.")
+    else:
+        bot.reply_to(m, "Ошибка. Только цифры.")
 @bot.message_handler(state=UserAnswers.hotel_qty)
 def get_hotel_qty(m: Message) -> None:
     """Записываем кол-во отелей в состояние пользователя и спрашиваем про фото отелей"""
@@ -164,6 +239,7 @@ def calendar(call: CallbackQuery):
 
     with bot.retrieve_data(call.from_user.id, call.message.chat.id) as data: #дата заезда - как минимальная дата выезда
         date = data['check_in']
+        command = data['command']
 
     result, key, step = DetailedTelegramCalendar(calendar_id=2, locale='ru', min_date=date).process(call.data)
     if not result and key:
@@ -195,14 +271,27 @@ def calendar(call: CallbackQuery):
         else:
             photo = 'Нет, не нужно'
 
-        bot.send_message(call.from_user.id, f"Спасибо, проверьте ваши данные:\n"
-                                            f"\nГород: {data['city'].title()}\n"
-                                            f"Количество отелей для просмотра: {data['hotel_qty']}\n"
-                                            f"Дата заселения: {data['check_in']}\n"
-                                            f"Дата выезда: {data['check_out']}\n"
-                                            f"Фото отелей: {photo}\n"
-                                            f"Всего дней проживания: {data['days_in_hotel']}\n"
-                                            f"\nЕсли всё верно - нажмите клавишу Да", reply_markup=answ.request_yes_no())
+        if command == 'bestdeal':
+            bot.send_message(call.from_user.id, f"Спасибо, проверьте ваши данные:\n"
+                                                f"\nГород: {data['city'].title()}\n"
+                                                f"Количество отелей для просмотра: {data['hotel_qty']}\n"
+                                                f"Дата заселения: {data['check_in']}\n"
+                                                f"Дата выезда: {data['check_out']}\n"
+                                                f"Фото отелей: {photo}\n"
+                                                f"Всего дней проживания: {data['days_in_hotel']}\n"
+                                                f"Стоимость за ночь = от {data['min_price']} до {data['max_price']} долларов США\n"
+                                                f"Расстояние от центра = от {data['min_distance']} до {data['max_distance']} км\n"
+                                                f"\nЕсли всё верно - нажмите клавишу Да", reply_markup=answ.request_yes_no())
+
+        else:
+            bot.send_message(call.from_user.id, f"Спасибо, проверьте ваши данные:\n"
+                                                f"\nГород: {data['city'].title()}\n"
+                                                f"Количество отелей для просмотра: {data['hotel_qty']}\n"
+                                                f"Дата заселения: {data['check_in']}\n"
+                                                f"Дата выезда: {data['check_out']}\n"
+                                                f"Фото отелей: {photo}\n"
+                                                f"Всего дней проживания: {data['days_in_hotel']}\n"
+                                                f"\nЕсли всё верно - нажмите клавишу Да", reply_markup=answ.request_yes_no())
 
         bot.set_state(call.from_user.id, UserAnswers.final, call.message.chat.id)
 
@@ -213,6 +302,13 @@ def get_hotels(m: Message):
      При необходимости снова запрос для получения фото и адреса.
      Запись данных о пользователе и отелях в БД"""
 
+    with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
+        command = data['command']
+    if command == 'bestdeal':
+        with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
+            min_distanse = data['min_distance']
+            max_distance = data['max_distance']
+
     if m.text.lower() == "да":
         bot.send_message(m.from_user.id, text='Ищу варианты по вашему запросу, нужно несколько секунд...')
         with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
@@ -222,6 +318,7 @@ def get_hotels(m: Message):
         hotels_qty = int(data['hotel_qty'])
         hotel_days = int(data['days_in_hotel'])
         city_name = data['city']
+        count = 0
         for hotel in range(hotels_qty):
             hotel_id = int(hotels_list['data']['propertySearch']['properties'][hotel]['id'])
             hotel_name = hotels_list['data']['propertySearch']['properties'][hotel]['name']
@@ -242,22 +339,56 @@ def get_hotels(m: Message):
                 'hotel_location': hotel_location
 
             }
-            add_response_to_db(hotel_data=hotel_data)
-            bot.send_message(m.from_user.id, text=
-                             f"Данные по отелю {hotel_name}: "
-                             f"\nАдрес: {hotel_address}"
-                             f"\nРасстояние от центра города = {hotel_location} км"
-                             f"\nСтоимость за 1 ночь = {hotel_price} долларов США"
-                             f"\nОбщая стоимость за {hotel_days} дней = {common_price} долларов США")
-            if data['photo']:
-                bot.send_message(m.from_user.id, text='Фотографии отеля:')
-                hotel_photos = data['photo_qty']
-                for photo in range(hotel_photos):
-                    photo_url = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['url']
-                    description = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['description']
+            # add_response_to_db(hotel_data=hotel_data)
+
+            if command == 'bestdeal':
+                if min_distanse < hotel_location < max_distance:
+                    add_response_to_db(hotel_data=hotel_data)
+                    count += 1
                     bot.send_message(m.from_user.id, text=
-                    f"{description}\n"
-                    f"{photo_url}")
+                                     f"Данные по отелю {hotel_name}: "
+                                     f"\nАдрес: {hotel_address}"
+                                     f"\nРасстояние от центра города = {hotel_location} км"
+                                     f"\nСтоимость за 1 ночь = {hotel_price} долларов США"
+                                     f"\nОбщая стоимость за {hotel_days} дней = {common_price} долларов США")
+                    if data['photo']:
+                        bot.send_message(m.from_user.id, text='Фотографии отеля:')
+                        hotel_photos = data['photo_qty']
+                        for photo in range(hotel_photos):
+                            photo_url = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['url']
+                            description = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['description']
+                            bot.send_message(m.from_user.id, text=
+                            f"{description}\n"
+                            f"{photo_url}")
+
+
+
+            else:
+                add_response_to_db(hotel_data=hotel_data)
+                bot.send_message(m.from_user.id, text=
+                                 f"Данные по отелю {hotel_name}: "
+                                 f"\nАдрес: {hotel_address}"
+                                 f"\nРасстояние от центра города = {hotel_location} км"
+                                 f"\nСтоимость за 1 ночь = {hotel_price} долларов США"
+                                 f"\nОбщая стоимость за {hotel_days} дней = {common_price} долларов США")
+                if data['photo']:
+                    bot.send_message(m.from_user.id, text='Фотографии отеля:')
+                    hotel_photos = data['photo_qty']
+                    for photo in range(hotel_photos):
+                        photo_url = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['url']
+                        description = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['description']
+                        bot.send_message(m.from_user.id, text=
+                        f"{description}\n"
+                        f"{photo_url}")
+
+        if command == 'bestdeal':
+            if count == 0:
+                bot.send_message(m.from_user.id, text='К сожалению, отеля с вашими требованиями не найдено.'
+                                                          'Попробуйте изменить запрос'
+                                 )
+            else:
+                bot.send_message(m.from_user.id, text='Это все найденные варианты, которые подходят под ваши требования.'
+                             )
         bot_help(m)
     elif m.text == '/history':
         history.get_history(m=m)

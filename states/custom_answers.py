@@ -19,4 +19,8 @@ class UserAnswers(StatesGroup):
     final = State()
     days_in_hotel = State()
     cities_data = State()
+    min_price = State()
+    max_price = State()
+    min_distance = State()
+    max_distance = State()
 

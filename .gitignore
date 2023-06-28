@@ -136,3 +136,4 @@ dmypy.json
 /database/response_history.db
 /database/users_history.db
 /database/history.sqlite3
+/database/history.db

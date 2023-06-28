@@ -18,4 +18,5 @@ class UserAnswers(StatesGroup):
     check_out = State()
     final = State()
     days_in_hotel = State()
+    cities_data = State()
 

@@ -8,35 +8,32 @@ import keyboards.reply.answers as answ
 import re
 from .requests_to_api import city_request, get_hotel_list, get_hotel_details
 from keyboards.inline.city_keyboard import city_keybord
-from .calendar import date_selection
+from . import history
 import datetime
 from telegram_bot_calendar import DetailedTelegramCalendar #LSTEP
 from handlers.custom_handlers.help import bot_help
-from database.bot_db import add_bot_user, add_response_to_db
+from database.bot_db import add_response_to_db
 
 LSTEP: dict[str, str] = {'y': 'год', 'm': 'месяц', 'd': 'день'}
 @bot.message_handler(commands=["lowprice", "highprice", "bestdeal"])
 def lowprice(m: Message) -> None:
     """функция обработки запроса /lowprice, /highprice и /bestdeal.
     Ловим ответ пользователя - город для поиска отеля
-    Записываю начальные состояния юзера
-    Записываю данные юзерв в БД"""
+    Записываю начальные состояния юзера"""
+    if m.text == '/bestdeal':
+        bot.reply_to(m, 'Команда в разработке, '
+                             'пока можно использовать /lowprice и /highprice для поиска.'
+                             'Пардон.')
+        bot_help(m)
+    else:
+        bot.set_state(m.from_user.id, UserAnswers.city, m.chat.id)
+        bot.send_message(m.from_user.id, text='Какой город вас интересует? ')
 
-    chat_id = m.from_user.id
-    user_name = m.from_user.username
-    user_fullname = m.from_user.full_name
-    add_bot_user(chat_id=chat_id,
-                 user_name=user_name,
-                 )
-
-    bot.set_state(m.from_user.id, UserAnswers.city, m.chat.id)
-    bot.send_message(m.from_user.id, text='Какой город вас интересует? ')
-
-    with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
-        data['command'] = m.text[1:]
-        data['chat_id'] = m.chat.id
-        data['tgram_id'] = m.from_user.id
-        data['date_time'] = datetime.datetime.utcnow().strftime('%d-%m-%Y %H:%M:%S')
+        with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
+            data['command'] = m.text[1:]
+            data['chat_id'] = m.chat.id
+            data['tgram_id'] = m.from_user.id
+            data['date_time'] = datetime.datetime.utcnow().strftime('%d-%m-%Y %H:%M:%S')
 
 @bot.message_handler(state=UserAnswers.city)
 def get_city_name(m: Message) -> None:
@@ -44,12 +41,13 @@ def get_city_name(m: Message) -> None:
     city_name = m.text.lower()
     pattern = r"^[A-Za-z_ -А-Яа-я]*$"
     if re.match(pattern, city_name):
-        city_data = city_request(city_name) # функция получения словаря с городами - "ИМЯ": "id"
+        city_data = city_request(city_name) # функция получения словаря с городами - "Название": "id"
         city_keybord(m, city_data)          # обращаюсь к функции с inline клавишами, где на клавишах имена городов, а ответ id города
         bot.set_state(m.from_user.id, UserAnswers.city_id, m.chat.id) # записываю id город в состояние пользователя и передаю для записи в data
 
-        with bot.retrieve_data(m.from_user.id, m.chat.id) as data:
-            data['city'] = m.text
+
+        with bot.retrieve_data(m.from_user.id, m.chat.id) as data: #записываю словарь с городами, чтобы потом в истории поиска вынуть полное имя города
+            data['cities_data'] = city_data
     else:
         bot.reply_to(m, "Ошибка в написании города. Должны быть только буквы")
 
@@ -59,7 +57,15 @@ def get_city_id(call: CallbackQuery):
     Спрашиваю про кол-во отелей"""
 
     city_id = call.data # Id города в сообщении от кнопки
-    # bot.send_message(call.from_user.id, f"ID города = {city_id}") # чтобы проверить Id при тесте в боте
+    with bot.retrieve_data(call.from_user.id, call.message.chat.id) as data:
+        city_data = data['cities_data']
+    city_name = ""
+    for k, v in city_data.items(): # ищу имя города по его Id
+        if city_id == v:
+            city_name = k
+    with bot.retrieve_data(call.from_user.id, call.message.chat.id) as data:
+        data['city'] = city_name
+
     bot.send_message(call.from_user.id, 'Отлично. Cколько отелей хотите просмотреть (не более 5)?', reply_markup=answ.request_hotels())
     # получаю ответ по клавишам с цифрами - функция request_hotels
     bot.set_state(call.from_user.id, UserAnswers.hotel_qty, call.message.chat.id)
@@ -217,16 +223,15 @@ def get_hotels(m: Message):
         hotel_days = int(data['days_in_hotel'])
         city_name = data['city']
         for hotel in range(hotels_qty):
-            hotel_data = dict()
             hotel_id = int(hotels_list['data']['propertySearch']['properties'][hotel]['id'])
             hotel_name = hotels_list['data']['propertySearch']['properties'][hotel]['name']
-            hotel_price = float(hotels_list['data']['propertySearch']['properties'][hotel]['price']['lead']['amount'],)
-            common_price = float(hotel_price * hotel_days)
+            hotel_price = round(float(hotels_list['data']['propertySearch']['properties'][hotel]['price']['lead']['amount'],), 2)
+            common_price = round(float(hotel_price * hotel_days), 2)
             hotel_location = hotels_list['data']['propertySearch']['properties'][hotel]['destinationInfo']['distanceFromDestination']['value']
             hotel_details = get_hotel_details(hotel_id=hotel_id)
             hotel_address = hotel_details['data']['propertyInfo']['summary']['location']['address']['addressLine']
             hotel_data = {          # делаю словарь с данными об отеле для сохранения в БД, фото не сохраняю.
-                'chat_id': m.from_user.id,
+                'chat_id': m.chat.id,
                 'city_name': city_name,
                 'hotel_id': hotel_id,
                 'hotel_name': hotel_name,
@@ -242,8 +247,8 @@ def get_hotels(m: Message):
                              f"Данные по отелю {hotel_name}: "
                              f"\nАдрес: {hotel_address}"
                              f"\nРасстояние от центра города = {hotel_location} км"
-                             f"\nСтоимость за 1 ночь = {round(hotel_price, 2)} долларов США"
-                             f"\nОбщая стоимость за {hotel_days} дней = {round(common_price, 2)} долларов США")
+                             f"\nСтоимость за 1 ночь = {hotel_price} долларов США"
+                             f"\nОбщая стоимость за {hotel_days} дней = {common_price} долларов США")
             if data['photo']:
                 bot.send_message(m.from_user.id, text='Фотографии отеля:')
                 hotel_photos = data['photo_qty']
@@ -254,6 +259,9 @@ def get_hotels(m: Message):
                     f"{description}\n"
                     f"{photo_url}")
         bot_help(m)
+    elif m.text == '/history':
+        history.get_history(m=m)
+
     else:
         bot.reply_to(m, "Попробуйте начать сначала, для ввода данных")
         bot_help(m)

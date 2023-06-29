@@ -319,32 +319,53 @@ def get_hotels(m: Message):
         hotel_days = int(data['days_in_hotel'])
         city_name = data['city']
         count = 0
-        for hotel in range(hotels_qty):
-            hotel_id = int(hotels_list['data']['propertySearch']['properties'][hotel]['id'])
-            hotel_name = hotels_list['data']['propertySearch']['properties'][hotel]['name']
-            hotel_price = round(float(hotels_list['data']['propertySearch']['properties'][hotel]['price']['lead']['amount'],), 2)
-            common_price = round(float(hotel_price * hotel_days), 2)
-            hotel_location = hotels_list['data']['propertySearch']['properties'][hotel]['destinationInfo']['distanceFromDestination']['value']
-            hotel_details = get_hotel_details(hotel_id=hotel_id)
-            hotel_address = hotel_details['data']['propertyInfo']['summary']['location']['address']['addressLine']
-            hotel_data = {          # делаю словарь с данными об отеле для сохранения в БД, фото не сохраняю.
-                'chat_id': m.chat.id,
-                'city_name': city_name,
-                'hotel_id': hotel_id,
-                'hotel_name': hotel_name,
-                'hotel_price': hotel_price,
-                'common_price': common_price,
-                'hotel_address': hotel_address,
-                'hotel_days': hotel_days,
-                'hotel_location': hotel_location
+        try:
+            for hotel in range(hotels_qty):
+                hotel_id = int(hotels_list['data']['propertySearch']['properties'][hotel]['id'])
+                hotel_name = hotels_list['data']['propertySearch']['properties'][hotel]['name']
+                hotel_price = round(float(hotels_list['data']['propertySearch']['properties'][hotel]['price']['lead']['amount'],), 2)
+                common_price = round(float(hotel_price * hotel_days), 2)
+                hotel_location = hotels_list['data']['propertySearch']['properties'][hotel]['destinationInfo']['distanceFromDestination']['value']
+                hotel_details = get_hotel_details(hotel_id=hotel_id)
+                hotel_address = hotel_details['data']['propertyInfo']['summary']['location']['address']['addressLine']
+                hotel_data = {          # делаю словарь с данными об отеле для сохранения в БД, фото не сохраняю.
+                    'chat_id': m.chat.id,
+                    'city_name': city_name,
+                    'hotel_id': hotel_id,
+                    'hotel_name': hotel_name,
+                    'hotel_price': hotel_price,
+                    'common_price': common_price,
+                    'hotel_address': hotel_address,
+                    'hotel_days': hotel_days,
+                    'hotel_location': hotel_location
 
-            }
-            # add_response_to_db(hotel_data=hotel_data)
+                }
+                # add_response_to_db(hotel_data=hotel_data)
 
-            if command == 'bestdeal':
-                if min_distanse < hotel_location < max_distance:
+                if command == 'bestdeal':
+                    if min_distanse < hotel_location < max_distance:
+                        add_response_to_db(hotel_data=hotel_data)
+                        count += 1
+                        bot.send_message(m.from_user.id, text=
+                                         f"Данные по отелю {hotel_name}: "
+                                         f"\nАдрес: {hotel_address}"
+                                         f"\nРасстояние от центра города = {hotel_location} км"
+                                         f"\nСтоимость за 1 ночь = {hotel_price} долларов США"
+                                         f"\nОбщая стоимость за {hotel_days} дней = {common_price} долларов США")
+                        if data['photo']:
+                            bot.send_message(m.from_user.id, text='Фотографии отеля:')
+                            hotel_photos = data['photo_qty']
+                            for photo in range(hotel_photos):
+                                photo_url = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['url']
+                                description = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['description']
+                                bot.send_message(m.from_user.id, text=
+                                f"{description}\n"
+                                f"{photo_url}")
+
+
+
+                else:
                     add_response_to_db(hotel_data=hotel_data)
-                    count += 1
                     bot.send_message(m.from_user.id, text=
                                      f"Данные по отелю {hotel_name}: "
                                      f"\nАдрес: {hotel_address}"
@@ -361,34 +382,17 @@ def get_hotels(m: Message):
                             f"{description}\n"
                             f"{photo_url}")
 
+            if command == 'bestdeal':
+                if count == 0:
+                    bot.send_message(m.from_user.id, text='К сожалению, отеля с вашими требованиями не найдено.'
+                                                              'Попробуйте изменить запрос'
+                                     )
+                else:
+                    bot.send_message(m.from_user.id, text='Это все найденные варианты, которые подходят под ваши требования.')
+        except Exception as e:
+            print('Exception risen', e)
+            bot.send_message(m.from_user.id, text='Ошибка запроса к сайту отелей. Повторите запрос.')
 
-
-            else:
-                add_response_to_db(hotel_data=hotel_data)
-                bot.send_message(m.from_user.id, text=
-                                 f"Данные по отелю {hotel_name}: "
-                                 f"\nАдрес: {hotel_address}"
-                                 f"\nРасстояние от центра города = {hotel_location} км"
-                                 f"\nСтоимость за 1 ночь = {hotel_price} долларов США"
-                                 f"\nОбщая стоимость за {hotel_days} дней = {common_price} долларов США")
-                if data['photo']:
-                    bot.send_message(m.from_user.id, text='Фотографии отеля:')
-                    hotel_photos = data['photo_qty']
-                    for photo in range(hotel_photos):
-                        photo_url = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['url']
-                        description = hotel_details['data']['propertyInfo']['propertyGallery']['images'][photo]['image']['description']
-                        bot.send_message(m.from_user.id, text=
-                        f"{description}\n"
-                        f"{photo_url}")
-
-        if command == 'bestdeal':
-            if count == 0:
-                bot.send_message(m.from_user.id, text='К сожалению, отеля с вашими требованиями не найдено.'
-                                                          'Попробуйте изменить запрос'
-                                 )
-            else:
-                bot.send_message(m.from_user.id, text='Это все найденные варианты, которые подходят под ваши требования.'
-                             )
         bot_help(m)
     elif m.text == '/history':
         history.get_history(m=m)

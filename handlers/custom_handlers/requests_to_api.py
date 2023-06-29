@@ -1,5 +1,4 @@
-from typing import Dict
-import json
+from config_data import config
 import requests
 
 def api_request(method_endswith, params, method_type):
@@ -32,7 +31,7 @@ def get_request(url, params):
             url,
             params=params,
             headers={
-                "X-RapidAPI-Key": "ec16790110msh47fb999be2bc46ap174b48jsn861c60ef2748",
+                "X-RapidAPI-Key": config.RAPID_API_KEY,
                 "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
             },
             timeout=10
@@ -54,7 +53,7 @@ def post_request(url, params):
             json=params,
             headers={
                 "content-type": "application/json",
-                "X-RapidAPI-Key": "ec16790110msh47fb999be2bc46ap174b48jsn861c60ef2748",
+                "X-RapidAPI-Key": config.RAPID_API_KEY,
                 "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
             },
             timeout=10
@@ -68,11 +67,12 @@ def post_request(url, params):
     except requests.exceptions.RequestException:
         return f"Ошибка запроса. Необходимо повторить запрос"
 
-def city_request(city):
+def city_request(city: str) -> dict:
+    """Получение данных об городах с названием, которое указал пользователь"""
     city_data = api_request(get_id_url, {"q": city, "locale": "ru_RU"}, 'GET')
     cities = dict()
     if city_data["sr"] is not None:
-        print(city_data['sr'])
+        print(city_data['sr']) # Для контроля в консоли
         for city in city_data['sr']:
             if city['type'] == "CITY":
                 city_id = city['gaiaId']
@@ -87,13 +87,17 @@ def city_request(city):
 
 
 def get_hotel_list(cust_data):
-    """запрос на список отелей"""
+    """запрос на список отелей в выбранном городе"""
 
-    price_choice = "PRICE_LOW_TO_HIGH"
+    sort = "PRICE_LOW_TO_HIGH" # для команды lowprice
 
-    if cust_data['command'] in ['highprice', 'bestdeal']:
-        price_choice = "PRICE_HIGH_TO_LOW"
+    if cust_data['command'] == 'highprice':
+        sort = "PRICE_HIGH_TO_LOW"
 
+    if cust_data['command'] == 'bestdeal':
+        sort = "DISTANCE"
+
+    """payload для запросов lowprice и highprice"""
     params = {
         "currency": "USD",
         "eapid": 1,
@@ -119,12 +123,13 @@ def get_hotel_list(cust_data):
         ],
         "resultsStartingIndex": 0,
         "resultsSize": int(cust_data['hotel_qty']),
-        "sort": price_choice,
+        "sort": sort,
         "filters": {
             "availableFilter": "SHOW_AVAILABLE_ONLY"
         }
     }
     if cust_data['command'] == 'bestdeal':
+        """payload для запроса bestdeal. добавлены цены в запрос и сортировка по расстоянию от центра"""
         params = {
             "currency": "USD",
             "eapid": 1,
@@ -150,7 +155,7 @@ def get_hotel_list(cust_data):
             ],
             "resultsStartingIndex": 0,
             "resultsSize": int(cust_data['hotel_qty']),
-            "sort": price_choice,
+            "sort": sort,
             "filters": {
                 "price": {
                     "max": cust_data['max_price'],
@@ -169,7 +174,7 @@ def get_hotel_list(cust_data):
     return hotel_list.json()
 
 def get_hotel_details(hotel_id):
-    """запрос на подробную информацию об отеле"""
+    """запрос на подробную информацию об отеле для вывода подробного адреса и фото"""
 
     hotel_details = api_request(
         method_endswith=req_hotel_prop_detailed,
